@@ -1,0 +1,45 @@
+[package]
+name = "corrently-fdw"
+version = "0.1.0"
+edition = "2021"
+description = "WASM Foreign Data Wrapper for Corrently GrünstromIndex API"
+repository = "https://github.com/powabase/powabase-fdw-corrently"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# REQUIRED: WebAssembly Interface Type (WIT) runtime bindings
+# Version 0.41.0 is tested and compatible with Supabase Wrappers v2 API
+wit-bindgen-rt = "0.41.0"
+
+# REQUIRED: JSON parsing for API responses
+# Important: Use default-features = false for WASM target
+# The "alloc" feature provides no_std allocation support
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+[lib]
+# REQUIRED: cdylib produces a C-compatible dynamic library for WASM
+crate-type = ["cdylib"]
+
+[profile.release]
+# CRITICAL: These settings optimize for binary size (target: < 150 KB)
+# DO NOT modify these without understanding impact on WASM binary size
+
+opt-level = "z"       # Optimize for size ("z" = most aggressive size optimization)
+lto = true            # Link-time optimization (reduces binary size by 20-30%)
+strip = "debuginfo"   # Strip debug information from binary (saves ~10-15 KB)
+codegen-units = 1     # Single codegen unit enables better optimization (slower compile, smaller binary)
+
+[package.metadata.component]
+# REQUIRED: Component package identifier
+# Format: "organization:package-name"
+package = "powabase:supabase-fdw-corrently"
+
+[package.metadata.component.target]
+# REQUIRED: Path to WIT world definition
+path = "wit"
+
+[package.metadata.component.target.dependencies]
+# REQUIRED: Supabase Wrappers framework dependency
+# This MUST point to the wit/deps/supabase-wrappers directory
+"supabase:wrappers" = { path = "wit/deps/supabase-wrappers" }

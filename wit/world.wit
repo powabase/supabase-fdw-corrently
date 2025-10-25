@@ -1,0 +1,23 @@
+// Corrently GrünstromIndex WASM FDW World Definition
+// Package: powabase:supabase-fdw-corrently
+// Version: 0.1.0
+
+package powabase:supabase-fdw-corrently@0.1.0;
+
+// World definition for Corrently FDW wrapper
+world corrently-fdw {
+    // REQUIRED IMPORTS: Supabase Wrappers v2 API interfaces
+
+    // HTTP client for API requests to Corrently API
+    import supabase:wrappers/http@0.2.0;
+
+    // Statistics and logging for debugging
+    import supabase:wrappers/stats@0.2.0;
+
+    // Utility functions for JSON parsing and error handling
+    import supabase:wrappers/utils@0.2.0;
+
+    // REQUIRED EXPORT: FDW entry points
+    // Exports: init(), begin_scan(), iter_scan(), end_scan()
+    export supabase:wrappers/routines@0.2.0;
+}
