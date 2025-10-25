@@ -10,13 +10,12 @@ This wrapper follows the WASM FDW architecture required for hosted Supabase inst
 
 ## Project Status
 
-**✅ v0.1.0 - Phase 4 Complete (Ready for CI/CD)**
+**✅ v0.1.0 - Released**
 
 - **Current Version:** v0.1.0
-- **Phase:** Phase 4 - Testing & Validation ✅ COMPLETE
-- **Next Phase:** Phase 6 - CI/CD & Release
-- **Endpoints:** 1 endpoint (gsi_prediction) - **WORKING**
-- **Columns:** 17 fields per forecast hour - **ALL TESTED**
+- **Status:** Released and production-ready
+- **Endpoints:** 1 endpoint (gsi_prediction)
+- **Columns:** 17 fields per forecast hour
 - **WASM Binary:** 106 KB, validated, zero WASI CLI imports ✅
 - **Query Performance:** ~300-400ms ✅
 
@@ -29,7 +28,7 @@ This wrapper follows the WASM FDW architecture required for hosted Supabase inst
 - **API:** Corrently GrünstromIndex API v2.0
 - **Deployment:** GitHub releases with WASM binaries
 
-## Available Endpoints (v0.1.0 Planned)
+## Available Endpoints
 
 | Endpoint | Rows | Data Type | Use Case |
 |----------|------|-----------|----------|
@@ -123,58 +122,7 @@ let price_str = forecast_obj.get("energyprice")
 let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 ```
 
-## Development Workflow
-
-### Completed Phases ✅
-
-**Phase 1: Requirements Analysis** ✅
-- [x] API research complete
-- [x] API_SPECIFICATION.md created
-- [x] Sample responses captured
-
-**Phase 2: Repository Setup** ✅
-- [x] Git repository initialized
-- [x] Directory structure created
-- [x] Cargo.toml configured with optimization flags
-- [x] WIT file created
-- [x] Supabase Wrappers WIT dependencies downloaded
-- [x] src/lib.rs stub created
-
-**Phase 3: Implementation** ✅
-- [x] 490 lines of Rust implementation
-- [x] All 17 columns implemented
-- [x] Nested JSON parsing (timeframe.start, timeframe.end)
-- [x] String parsing (energyprice)
-- [x] Array flattening (113 forecast objects → 113 SQL rows)
-- [x] Error handling implemented
-- [x] Host version set to ^0.1.0 (critical fix)
-
-**Phase 4: Testing & Validation** ✅
-- [x] WASM binary validated (106 KB, zero WASI CLI imports)
-- [x] Local Supabase testing complete
-- [x] All 17 columns returning data (no NULLs)
-- [x] Query performance validated (~300-400ms)
-- [x] Edge cases tested (negative prices, nested JSON)
-- [x] Test suite created (test_fdw.sql - 12 queries)
-- [x] setup_fdw.sql created
-
-**Phase 5: Documentation** ✅
-- [x] README.md comprehensive rewrite
-- [x] QUICKSTART.md created (3-minute setup)
-- [x] docs/endpoints/gsi-prediction.md created (detailed reference)
-- [x] CLAUDE.md updated (this file)
-- [x] PHASE5_HANDOFF.md (in progress)
-
-### Next Phase: Phase 6 - CI/CD & Release
-
-**Tasks:**
-- [ ] Create .github/workflows/release.yml
-- [ ] Set up automated builds on tag push
-- [ ] Create GitHub release with WASM binary
-- [ ] Test release deployment
-- [ ] Update documentation with release URLs
-
-## Testing Results (Phase 4)
+## Production Metrics
 
 **WASM Binary:**
 - Size: 106 KB (under 150 KB target ✅)
@@ -194,11 +142,6 @@ let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 - String parsing working (energyprice)
 - Negative prices handled correctly
 - 113 forecast hours returned
-
-**Critical Fixes Applied:**
-- Host version changed from ^0.2.0 to ^0.1.0 (Phase 4 discovery)
-- Supabase Wrappers local version: 0.1.5
-- Requires Supabase restart after WASM changes (cache clearing)
 
 ## Known Limitations & Edge Cases
 
@@ -230,15 +173,6 @@ let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 - **QUICKSTART.md** - 3-minute setup guide
 - **docs/endpoints/gsi-prediction.md** - Complete endpoint reference
 
-**Development Documentation:**
-- **Phase 1 Research:** `phase1-research/`
-  - `API_SPECIFICATION.md` - Complete API documentation
-  - `PHASE1_HANDOFF.md` - Phase 1 → 2 handoff
-  - `response_prediction_*.json` - Sample API responses
-- **Phase Handoffs:** `PHASE2_HANDOFF.md`, `PHASE3_HANDOFF.md`, `PHASE4_HANDOFF.md`, `PHASE5_HANDOFF.md`
-- **Testing:** `test_fdw.sql` (12 comprehensive queries), `setup_fdw.sql`
-- **Development Guide:** `/Users/cf/Documents/GitHub/powabase/powabase-backend/docs/fdw-wrappers/DEVELOPMENT_GUIDE.md`
-
 ## Version Coordination
 
 **Important:** Keep versions synchronized across:
@@ -250,6 +184,6 @@ All three must match for successful builds and releases.
 
 ## Repository
 
-- **GitHub:** https://github.com/powabase/supabase-fdw-corrently (to be created)
+- **GitHub:** https://github.com/powabase/supabase-fdw-corrently
 - **Package:** powabase:supabase-fdw-corrently
 - **License:** Apache-2.0
