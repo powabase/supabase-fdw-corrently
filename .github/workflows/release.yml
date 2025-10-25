@@ -155,7 +155,7 @@ jobs:
                 fdw_package_name 'powabase:supabase-fdw-corrently',
                 fdw_package_version '${{ steps.version.outputs.version }}',
                 fdw_package_checksum '${{ steps.checksum.outputs.checksum }}',
-                api_url 'https://api.corrently.io/v2.0'
+                api_url 'https://api.corrently.io'
               );
 
             -- Create schema
