@@ -1,27 +1,39 @@
-# Rust build artifacts
-/target
-Cargo.lock
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
 
-# IDE and editor files
+# Cargo
+# Note: Cargo.lock is committed for WASM binaries to ensure reproducible builds
+# Cargo.lock
+
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# macOS
-.DS_Store
+# Claude Code local settings
+.claude/
 
-# Environment and secrets (IMPORTANT: Never commit API keys!)
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.wasm
+*.wasm.sha256
+
+# Local dev
 .env
 .env.local
-*.key
-*.pem
+
+# Supabase
+.branches/
+.temp/
 
 # Temporary files
 *.tmp
 *.bak
-
-# Test outputs
-test_output/
 *.log

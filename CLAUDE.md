@@ -10,13 +10,15 @@ This wrapper follows the WASM FDW architecture required for hosted Supabase inst
 
 ## Project Status
 
-**🚧 v0.1.0 - In Development (Phase 2 Complete)**
+**✅ v0.1.0 - Phase 4 Complete (Ready for CI/CD)**
 
 - **Current Version:** v0.1.0
-- **Phase:** Phase 2 - Repository Setup ✅ COMPLETE
-- **Next Phase:** Phase 3 - Implementation
-- **Target Endpoints:** 1 endpoint (gsi_prediction)
-- **Target Columns:** 17 fields per forecast hour
+- **Phase:** Phase 4 - Testing & Validation ✅ COMPLETE
+- **Next Phase:** Phase 6 - CI/CD & Release
+- **Endpoints:** 1 endpoint (gsi_prediction) - **WORKING**
+- **Columns:** 17 fields per forecast hour - **ALL TESTED**
+- **WASM Binary:** 106 KB, validated, zero WASI CLI imports ✅
+- **Query Performance:** ~300-400ms ✅
 
 ## Technology Stack
 
@@ -123,29 +125,118 @@ let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 
 ## Development Workflow
 
-### Current Phase: Phase 2 Complete ✅
+### Completed Phases ✅
 
-**Completed:**
+**Phase 1: Requirements Analysis** ✅
+- [x] API research complete
+- [x] API_SPECIFICATION.md created
+- [x] Sample responses captured
+
+**Phase 2: Repository Setup** ✅
 - [x] Git repository initialized
 - [x] Directory structure created
 - [x] Cargo.toml configured with optimization flags
 - [x] WIT file created
 - [x] Supabase Wrappers WIT dependencies downloaded
 - [x] src/lib.rs stub created
-- [x] cargo check passes
-- [x] .gitignore configured
 
-**Next Phase: Phase 3 - Implementation**
+**Phase 3: Implementation** ✅
+- [x] 490 lines of Rust implementation
+- [x] All 17 columns implemented
+- [x] Nested JSON parsing (timeframe.start, timeframe.end)
+- [x] String parsing (energyprice)
+- [x] Array flattening (113 forecast objects → 113 SQL rows)
+- [x] Error handling implemented
+- [x] Host version set to ^0.1.0 (critical fix)
 
-See `phase1-research/PHASE1_HANDOFF.md` for complete API specification and implementation plan.
+**Phase 4: Testing & Validation** ✅
+- [x] WASM binary validated (106 KB, zero WASI CLI imports)
+- [x] Local Supabase testing complete
+- [x] All 17 columns returning data (no NULLs)
+- [x] Query performance validated (~300-400ms)
+- [x] Edge cases tested (negative prices, nested JSON)
+- [x] Test suite created (test_fdw.sql - 12 queries)
+- [x] setup_fdw.sql created
+
+**Phase 5: Documentation** ✅
+- [x] README.md comprehensive rewrite
+- [x] QUICKSTART.md created (3-minute setup)
+- [x] docs/endpoints/gsi-prediction.md created (detailed reference)
+- [x] CLAUDE.md updated (this file)
+- [x] PHASE5_HANDOFF.md (in progress)
+
+### Next Phase: Phase 6 - CI/CD & Release
+
+**Tasks:**
+- [ ] Create .github/workflows/release.yml
+- [ ] Set up automated builds on tag push
+- [ ] Create GitHub release with WASM binary
+- [ ] Test release deployment
+- [ ] Update documentation with release URLs
+
+## Testing Results (Phase 4)
+
+**WASM Binary:**
+- Size: 106 KB (under 150 KB target ✅)
+- Checksum: `0747c2f6e9da61d27581b30716d9faa5204044419a4f796d5fb943e23143da02`
+- Validation: Zero WASI CLI imports ✅
+- Host version: ^0.1.0 (critical requirement)
+
+**Query Performance:**
+- Cold start: ~400ms
+- Warm queries: ~300ms
+- API latency: ~200-300ms
+- Parsing overhead: ~50-100ms
+
+**Data Quality:**
+- All 17 columns returning data (no NULLs)
+- Nested JSON parsing working (timeframe fields)
+- String parsing working (energyprice)
+- Negative prices handled correctly
+- 113 forecast hours returned
+
+**Critical Fixes Applied:**
+- Host version changed from ^0.2.0 to ^0.1.0 (Phase 4 discovery)
+- Supabase Wrappers local version: 0.1.5
+- Requires Supabase restart after WASM changes (cache clearing)
+
+## Known Limitations & Edge Cases
+
+**Handled in v0.1.0:**
+- ✅ energyprice string parsing (converts "-0.014000" → -0.014)
+- ✅ Nested timeframe access (safe double .get() pattern)
+- ✅ Missing zip parameter (clear error message)
+- ✅ Negative energy prices (correctly handled, no abs() applied)
+- ✅ Bounds checking (all Vec access uses safe .get())
+
+**Not Yet Implemented:**
+- ⚠️ import_foreign_schema() - Returns empty vec (manual table creation required)
+- ⚠️ Signature field - Not exposed (cryptographic verification field)
+- ⚠️ API metadata fields - support, info, documentation not exposed
+- ⚠️ Rate limit handling - No retry logic for 429 errors
+- ⚠️ Invalid ZIP validation - May return empty results or API error
+
+**API Constraints:**
+- Geographic scope: Germany only (German postal codes)
+- Forecast window: ~113 hours (variable, API-dependent)
+- Rate limiting: 2,000 requests/day (authenticated tier)
+- Historical data: Not available via this endpoint
+- Parameter validation: API-side (invalid ZIPs may error)
 
 ## Documentation
 
+**User Documentation:**
+- **README.md** - Comprehensive project overview
+- **QUICKSTART.md** - 3-minute setup guide
+- **docs/endpoints/gsi-prediction.md** - Complete endpoint reference
+
+**Development Documentation:**
 - **Phase 1 Research:** `phase1-research/`
   - `API_SPECIFICATION.md` - Complete API documentation
   - `PHASE1_HANDOFF.md` - Phase 1 → 2 handoff
   - `response_prediction_*.json` - Sample API responses
-
+- **Phase Handoffs:** `PHASE2_HANDOFF.md`, `PHASE3_HANDOFF.md`, `PHASE4_HANDOFF.md`, `PHASE5_HANDOFF.md`
+- **Testing:** `test_fdw.sql` (12 comprehensive queries), `setup_fdw.sql`
 - **Development Guide:** `/Users/cf/Documents/GitHub/powabase/powabase-backend/docs/fdw-wrappers/DEVELOPMENT_GUIDE.md`
 
 ## Version Coordination
@@ -159,6 +250,6 @@ All three must match for successful builds and releases.
 
 ## Repository
 
-- **GitHub:** https://github.com/powabase/powabase-fdw-corrently (to be created)
+- **GitHub:** https://github.com/powabase/supabase-fdw-corrently (to be created)
 - **Package:** powabase:supabase-fdw-corrently
 - **License:** Apache-2.0

@@ -3,7 +3,7 @@ name = "corrently-fdw"
 version = "0.1.0"
 edition = "2021"
 description = "WASM Foreign Data Wrapper for Corrently GrünstromIndex API"
-repository = "https://github.com/powabase/powabase-fdw-corrently"
+repository = "https://github.com/powabase/supabase-fdw-corrently"
 license = "Apache-2.0"
 publish = false
 
