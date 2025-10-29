@@ -3,8 +3,13 @@
 // This FDW wrapper provides access to the Corrently GrünstromIndex API,
 // enabling green energy forecasting queries directly from PostgreSQL.
 //
-// Version: 0.1.0
+// Version: 0.2.0
 // API: Corrently v2.0 (https://api.corrently.io/v2.0)
+//
+// BREAKING CHANGES in v0.2.0:
+// - All column names standardized to follow database schema design standards
+// - Temporal fields now use TIMESTAMP WITH TIME ZONE (not BIGINT)
+// - See MIGRATION.md for upgrade guide
 
 #[allow(warnings)]
 mod bindings;
@@ -34,28 +39,27 @@ struct CorrentlyFdw {
     headers: Vec<(String, String)>,
 
     // Query parameters (from WHERE clause)
-    zip: String,
+    postal_code: String,
     hours: Option<i64>,
 
     // Cached forecast data (flattened from API response array)
     // Each Vec contains N elements (one per forecast hour, typically ~113)
-    epochtime: Vec<i64>,
-    timestamp: Vec<i64>,
-    timeframe_start: Vec<i64>,
-    timeframe_end: Vec<i64>,
-    gsi: Vec<f64>,
-    eevalue: Vec<i64>,
-    ewind: Vec<i64>,
-    esolar: Vec<i64>,
-    enwind: Vec<i64>,
-    ensolar: Vec<i64>,
-    sci: Vec<i64>,
-    energyprice: Vec<f64>,
-    co2_avg: Vec<f64>,
-    co2_g_standard: Vec<i64>,
-    co2_g_oekostrom: Vec<i64>,
-    zip_values: Vec<String>,
-    iat: Vec<i64>,
+    forecast_start_time: Vec<i64>, // Milliseconds (converted to TIMESTAMP WITH TIME ZONE)
+    forecast_period_start: Vec<i64>, // Milliseconds (converted to TIMESTAMP WITH TIME ZONE)
+    forecast_period_end: Vec<i64>, // Milliseconds (converted to TIMESTAMP WITH TIME ZONE)
+    green_energy_index: Vec<f64>,
+    renewable_energy_pct: Vec<i64>,
+    wind_energy_pct: Vec<i64>,
+    solar_energy_pct: Vec<i64>,
+    net_wind_energy_pct: Vec<i64>,
+    net_solar_energy_pct: Vec<i64>,
+    smart_city_index: Vec<i64>,
+    energy_price_eur_kwh: Vec<f64>,
+    co2_baseline_g_kwh: Vec<f64>,
+    standard_mix_co2_g_kwh: Vec<i64>,
+    green_mix_co2_g_kwh: Vec<i64>,
+    postal_code_values: Vec<String>,
+    forecast_created_at: Vec<i64>, // Milliseconds (converted to TIMESTAMP WITH TIME ZONE)
 
     // Iteration state
     current_row: usize,
@@ -80,28 +84,27 @@ impl CorrentlyFdw {
 
     /// Get total number of rows in cached data
     fn row_count(&self) -> usize {
-        self.epochtime.len()
+        self.forecast_start_time.len()
     }
 
     /// Clear all cached forecast data
     fn clear_data(&mut self) {
-        self.epochtime.clear();
-        self.timestamp.clear();
-        self.timeframe_start.clear();
-        self.timeframe_end.clear();
-        self.gsi.clear();
-        self.eevalue.clear();
-        self.ewind.clear();
-        self.esolar.clear();
-        self.enwind.clear();
-        self.ensolar.clear();
-        self.sci.clear();
-        self.energyprice.clear();
-        self.co2_avg.clear();
-        self.co2_g_standard.clear();
-        self.co2_g_oekostrom.clear();
-        self.zip_values.clear();
-        self.iat.clear();
+        self.forecast_start_time.clear();
+        self.forecast_period_start.clear();
+        self.forecast_period_end.clear();
+        self.green_energy_index.clear();
+        self.renewable_energy_pct.clear();
+        self.wind_energy_pct.clear();
+        self.solar_energy_pct.clear();
+        self.net_wind_energy_pct.clear();
+        self.net_solar_energy_pct.clear();
+        self.smart_city_index.clear();
+        self.energy_price_eur_kwh.clear();
+        self.co2_baseline_g_kwh.clear();
+        self.standard_mix_co2_g_kwh.clear();
+        self.green_mix_co2_g_kwh.clear();
+        self.postal_code_values.clear();
+        self.forecast_created_at.clear();
         self.current_row = 0;
     }
 
@@ -148,128 +151,121 @@ impl CorrentlyFdw {
         // Iterate through forecast array and flatten to vectors
         // CRITICAL: Use .get() for all JSON access (never use [])
         for (idx, forecast_obj) in forecast_array.iter().enumerate() {
-            // epochtime (seconds)
-            let epochtime_val = forecast_obj
-                .get("epochtime")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| format!("missing or invalid 'epochtime' at index {}", idx))?;
-            self.epochtime.push(epochtime_val);
-
-            // timeStamp (milliseconds)
-            let timestamp_val = forecast_obj
+            // forecast_start_time (timeStamp in milliseconds)
+            let forecast_start_time_val = forecast_obj
                 .get("timeStamp")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'timeStamp' at index {}", idx))?;
-            self.timestamp.push(timestamp_val);
+            self.forecast_start_time.push(forecast_start_time_val);
 
-            // timeframe.start (nested object)
-            let timeframe_start_val = forecast_obj
+            // forecast_period_start (timeframe.start in milliseconds)
+            let forecast_period_start_val = forecast_obj
                 .get("timeframe")
                 .and_then(|tf| tf.get("start"))
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'timeframe.start' at index {}", idx))?;
-            self.timeframe_start.push(timeframe_start_val);
+            self.forecast_period_start.push(forecast_period_start_val);
 
-            // timeframe.end (nested object)
-            let timeframe_end_val = forecast_obj
+            // forecast_period_end (timeframe.end in milliseconds)
+            let forecast_period_end_val = forecast_obj
                 .get("timeframe")
                 .and_then(|tf| tf.get("end"))
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'timeframe.end' at index {}", idx))?;
-            self.timeframe_end.push(timeframe_end_val);
+            self.forecast_period_end.push(forecast_period_end_val);
 
-            // gsi (GrünstromIndex value)
-            let gsi_val = forecast_obj
+            // green_energy_index (GrünstromIndex value 0-100)
+            let green_energy_index_val = forecast_obj
                 .get("gsi")
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| format!("missing or invalid 'gsi' at index {}", idx))?;
-            self.gsi.push(gsi_val);
+            self.green_energy_index.push(green_energy_index_val);
 
-            // eevalue (renewable energy percentage)
-            let eevalue_val = forecast_obj
+            // renewable_energy_pct (total renewable energy percentage)
+            let renewable_energy_pct_val = forecast_obj
                 .get("eevalue")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'eevalue' at index {}", idx))?;
-            self.eevalue.push(eevalue_val);
+            self.renewable_energy_pct.push(renewable_energy_pct_val);
 
-            // ewind (wind energy percentage)
-            let ewind_val = forecast_obj
+            // wind_energy_pct (wind energy percentage)
+            let wind_energy_pct_val = forecast_obj
                 .get("ewind")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'ewind' at index {}", idx))?;
-            self.ewind.push(ewind_val);
+            self.wind_energy_pct.push(wind_energy_pct_val);
 
-            // esolar (solar energy percentage)
-            let esolar_val = forecast_obj
+            // solar_energy_pct (solar energy percentage)
+            let solar_energy_pct_val = forecast_obj
                 .get("esolar")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'esolar' at index {}", idx))?;
-            self.esolar.push(esolar_val);
+            self.solar_energy_pct.push(solar_energy_pct_val);
 
-            // enwind (net wind energy percentage)
-            let enwind_val = forecast_obj
+            // net_wind_energy_pct (net wind energy percentage)
+            let net_wind_energy_pct_val = forecast_obj
                 .get("enwind")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'enwind' at index {}", idx))?;
-            self.enwind.push(enwind_val);
+            self.net_wind_energy_pct.push(net_wind_energy_pct_val);
 
-            // ensolar (net solar energy percentage)
-            let ensolar_val = forecast_obj
+            // net_solar_energy_pct (net solar energy percentage)
+            let net_solar_energy_pct_val = forecast_obj
                 .get("ensolar")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'ensolar' at index {}", idx))?;
-            self.ensolar.push(ensolar_val);
+            self.net_solar_energy_pct.push(net_solar_energy_pct_val);
 
-            // sci (Smart City Index)
-            let sci_val = forecast_obj
+            // smart_city_index (Smart City Index 0-100)
+            let smart_city_index_val = forecast_obj
                 .get("sci")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'sci' at index {}", idx))?;
-            self.sci.push(sci_val);
+            self.smart_city_index.push(smart_city_index_val);
 
-            // energyprice (CRITICAL: This is a STRING in API, needs parsing!)
-            let energyprice_str = forecast_obj
+            // energy_price_eur_kwh (CRITICAL: This is a STRING in API, needs parsing!)
+            let energy_price_str = forecast_obj
                 .get("energyprice")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| format!("missing or invalid 'energyprice' at index {}", idx))?;
-            let energyprice_val: f64 = energyprice_str.parse().unwrap_or(0.0); // Default to 0.0 if parsing fails
-            self.energyprice.push(energyprice_val);
+            let energy_price_val: f64 = energy_price_str.parse().unwrap_or(0.0); // Default to 0.0 if parsing fails
+            self.energy_price_eur_kwh.push(energy_price_val);
 
-            // co2_avg (average CO2 baseline)
-            let co2_avg_val = forecast_obj
+            // co2_baseline_g_kwh (average CO2 baseline)
+            let co2_baseline_val = forecast_obj
                 .get("co2_avg")
                 .and_then(|v| v.as_f64())
                 .ok_or_else(|| format!("missing or invalid 'co2_avg' at index {}", idx))?;
-            self.co2_avg.push(co2_avg_val);
+            self.co2_baseline_g_kwh.push(co2_baseline_val);
 
-            // co2_g_standard (CO2 for standard mix)
-            let co2_g_standard_val = forecast_obj
+            // standard_mix_co2_g_kwh (CO2 for standard energy mix)
+            let standard_mix_co2_val = forecast_obj
                 .get("co2_g_standard")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'co2_g_standard' at index {}", idx))?;
-            self.co2_g_standard.push(co2_g_standard_val);
+            self.standard_mix_co2_g_kwh.push(standard_mix_co2_val);
 
-            // co2_g_oekostrom (CO2 for green mix)
-            let co2_g_oekostrom_val = forecast_obj
+            // green_mix_co2_g_kwh (CO2 for green energy mix)
+            let green_mix_co2_val = forecast_obj
                 .get("co2_g_oekostrom")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'co2_g_oekostrom' at index {}", idx))?;
-            self.co2_g_oekostrom.push(co2_g_oekostrom_val);
+            self.green_mix_co2_g_kwh.push(green_mix_co2_val);
 
-            // zip (postal code)
-            let zip_val = forecast_obj
+            // postal_code (German postal code, 5 digits)
+            let postal_code_val = forecast_obj
                 .get("zip")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| format!("missing or invalid 'zip' at index {}", idx))?
                 .to_string();
-            self.zip_values.push(zip_val);
+            self.postal_code_values.push(postal_code_val);
 
-            // iat (issued-at timestamp)
-            let iat_val = forecast_obj
+            // forecast_created_at (issued-at timestamp in milliseconds)
+            let forecast_created_at_val = forecast_obj
                 .get("iat")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| format!("missing or invalid 'iat' at index {}", idx))?;
-            self.iat.push(iat_val);
+            self.forecast_created_at.push(forecast_created_at_val);
         }
 
         utils::report_info(&format!(
@@ -290,27 +286,65 @@ impl CorrentlyFdw {
         }
 
         // Map column name to stored data using safe .get() pattern
+        // CRITICAL: Temporal fields convert milliseconds → microseconds for TIMESTAMP WITH TIME ZONE
         let cell = match tgt_col.name().as_str() {
-            "epochtime" => self.epochtime.get(row_idx).map(|&v| Cell::I64(v)),
-            "timestamp" => self.timestamp.get(row_idx).map(|&v| Cell::I64(v)),
-            "timeframe_start" => self.timeframe_start.get(row_idx).map(|&v| Cell::I64(v)),
-            "timeframe_end" => self.timeframe_end.get(row_idx).map(|&v| Cell::I64(v)),
-            "gsi" => self.gsi.get(row_idx).map(|&v| Cell::Numeric(v)),
-            "eevalue" => self.eevalue.get(row_idx).map(|&v| Cell::I64(v)),
-            "ewind" => self.ewind.get(row_idx).map(|&v| Cell::I64(v)),
-            "esolar" => self.esolar.get(row_idx).map(|&v| Cell::I64(v)),
-            "enwind" => self.enwind.get(row_idx).map(|&v| Cell::I64(v)),
-            "ensolar" => self.ensolar.get(row_idx).map(|&v| Cell::I64(v)),
-            "sci" => self.sci.get(row_idx).map(|&v| Cell::I64(v)),
-            "energyprice" => self.energyprice.get(row_idx).map(|&v| Cell::Numeric(v)),
-            "co2_avg" => self.co2_avg.get(row_idx).map(|&v| Cell::Numeric(v)),
-            "co2_g_standard" => self.co2_g_standard.get(row_idx).map(|&v| Cell::I64(v)),
-            "co2_g_oekostrom" => self.co2_g_oekostrom.get(row_idx).map(|&v| Cell::I64(v)),
-            "zip" => self
-                .zip_values
+            // Temporal fields (TIMESTAMP WITH TIME ZONE) - convert ms to microseconds
+            "forecast_start_time" => self
+                .forecast_start_time
+                .get(row_idx)
+                .map(|&ms| Cell::Timestamptz(ms * 1000)),
+            "forecast_period_start" => self
+                .forecast_period_start
+                .get(row_idx)
+                .map(|&ms| Cell::Timestamptz(ms * 1000)),
+            "forecast_period_end" => self
+                .forecast_period_end
+                .get(row_idx)
+                .map(|&ms| Cell::Timestamptz(ms * 1000)),
+            "forecast_created_at" => self
+                .forecast_created_at
+                .get(row_idx)
+                .map(|&ms| Cell::Timestamptz(ms * 1000)),
+
+            // Energy metrics
+            "green_energy_index" => self
+                .green_energy_index
+                .get(row_idx)
+                .map(|&v| Cell::Numeric(v)),
+            "renewable_energy_pct" => self
+                .renewable_energy_pct
+                .get(row_idx)
+                .map(|&v| Cell::I64(v)),
+            "wind_energy_pct" => self.wind_energy_pct.get(row_idx).map(|&v| Cell::I64(v)),
+            "solar_energy_pct" => self.solar_energy_pct.get(row_idx).map(|&v| Cell::I64(v)),
+            "net_wind_energy_pct" => self.net_wind_energy_pct.get(row_idx).map(|&v| Cell::I64(v)),
+            "net_solar_energy_pct" => self
+                .net_solar_energy_pct
+                .get(row_idx)
+                .map(|&v| Cell::I64(v)),
+            "smart_city_index" => self.smart_city_index.get(row_idx).map(|&v| Cell::I64(v)),
+
+            // Pricing and CO2 metrics
+            "energy_price_eur_kwh" => self
+                .energy_price_eur_kwh
+                .get(row_idx)
+                .map(|&v| Cell::Numeric(v)),
+            "co2_baseline_g_kwh" => self
+                .co2_baseline_g_kwh
+                .get(row_idx)
+                .map(|&v| Cell::Numeric(v)),
+            "standard_mix_co2_g_kwh" => self
+                .standard_mix_co2_g_kwh
+                .get(row_idx)
+                .map(|&v| Cell::I64(v)),
+            "green_mix_co2_g_kwh" => self.green_mix_co2_g_kwh.get(row_idx).map(|&v| Cell::I64(v)),
+
+            // Geographic dimension
+            "postal_code" => self
+                .postal_code_values
                 .get(row_idx)
                 .map(|v| Cell::String(v.clone())),
-            "iat" => self.iat.get(row_idx).map(|&v| Cell::I64(v)),
+
             _ => return Err(format!("unknown column '{}'", tgt_col.name())),
         };
 
@@ -363,9 +397,10 @@ impl Guest for CorrentlyFdw {
         // Extract WHERE clause parameters
         let quals = ctx.get_quals();
 
-        // Extract zip (required)
-        this.zip = Self::extract_qual_string(&quals, "zip")
-            .ok_or("zip parameter is required in WHERE clause (e.g., WHERE zip = '69168')")?;
+        // Extract postal_code (required)
+        this.postal_code = Self::extract_qual_string(&quals, "postal_code").ok_or(
+            "postal_code parameter is required in WHERE clause (e.g., WHERE postal_code = '69168')",
+        )?;
 
         // Extract hours (optional)
         this.hours = Self::extract_qual_i64(&quals, "hours");
@@ -373,7 +408,7 @@ impl Guest for CorrentlyFdw {
         // Build API URL
         let mut url = format!(
             "{}/v2.0/gsi/prediction?zip={}&token={}",
-            this.base_url, this.zip, this.api_key
+            this.base_url, this.postal_code, this.api_key
         );
 
         if let Some(hours_val) = this.hours {
@@ -381,8 +416,8 @@ impl Guest for CorrentlyFdw {
         }
 
         utils::report_info(&format!(
-            "Fetching Corrently forecast for ZIP: {}, hours: {:?}",
-            this.zip, this.hours
+            "Fetching Corrently forecast for postal code: {}, hours: {:?}",
+            this.postal_code, this.hours
         ));
 
         // Make HTTP request

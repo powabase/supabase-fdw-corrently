@@ -5779,7 +5779,7 @@ macro_rules! __export_corrently_fdw_impl {
 #[doc(inline)]
 pub(crate) use __export_corrently_fdw_impl as export;
 #[cfg(target_arch = "wasm32")]
-#[unsafe(link_section = "component-type:wit-bindgen:0.41.0:powabase:supabase-fdw-corrently@0.1.0:corrently-fdw:encoded world")]
+#[unsafe(link_section = "component-type:wit-bindgen:0.41.0:powabase:supabase-fdw-corrently@0.2.0:corrently-fdw:encoded world")]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 3662] = *b"\
@@ -5861,7 +5861,7 @@ ext\x03\0\x06\x02\x03\x02\x01\x08\x04\0\x09fdw-error\x03\0\x08\x02\x03\x02\x01\x
 \x01@\x02\x03ctx\x0d\x05rowid\x01\0\x0b\x04\0\x06delete\x01\x15\x04\0\x0aend-mod\
 ify\x01\x0e\x01ps\x01j\x01\x16\x01\x09\x01@\x02\x03ctx\x0d\x04stmt\x05\0\x17\x04\
 \0\x15import-foreign-schema\x01\x18\x04\0\x20supabase:wrappers/routines@0.2.0\x05\
-\x0a\x04\03powabase:supabase-fdw-corrently/corrently-fdw@0.1.0\x04\0\x0b\x13\x01\
+\x0a\x04\03powabase:supabase-fdw-corrently/corrently-fdw@0.2.0\x04\0\x0b\x13\x01\
 \0\x0dcorrently-fdw\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwit-compo\
 nent\x070.227.1\x10wit-bindgen-rust\x060.41.0";
 #[inline(never)]

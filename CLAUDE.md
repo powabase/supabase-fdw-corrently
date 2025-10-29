@@ -10,14 +10,15 @@ This wrapper follows the WASM FDW architecture required for hosted Supabase inst
 
 ## Project Status
 
-**✅ v0.1.0 - Released**
+**✅ v0.2.0 - Released**
 
-- **Current Version:** v0.1.0
+- **Current Version:** v0.2.0
 - **Status:** Released and production-ready
 - **Endpoints:** 1 endpoint (gsi_prediction)
-- **Columns:** 17 fields per forecast hour
+- **Columns:** 16 fields per forecast hour (removed `epochtime` from v0.1.0)
 - **WASM Binary:** 106 KB, validated, zero WASI CLI imports ✅
 - **Query Performance:** ~300-400ms ✅
+- **Breaking Changes:** All column names standardized, TIMESTAMP WITH TIME ZONE for temporal fields
 
 ## Technology Stack
 
@@ -48,7 +49,7 @@ cargo component build --release --target wasm32-unknown-unknown
 
 # Verify output
 ls -lh target/wasm32-unknown-unknown/release/*.wasm
-# Expected: ~130-150 KB (similar to OpenWeather complexity)
+# Expected: ~106 KB
 ```
 
 ### Validation Commands
@@ -61,11 +62,26 @@ wasm-tools validate target/wasm32-unknown-unknown/release/corrently_fdw.wasm
 wasm-tools component wit target/wasm32-unknown-unknown/release/corrently_fdw.wasm | grep wasi:cli
 # Expected: (no output)
 
-# Calculate checksum
+# Calculate checksum for v0.2.0
 shasum -a 256 target/wasm32-unknown-unknown/release/corrently_fdw.wasm
+# Expected: 6f182a640568669afa6294641aa074bb13a332b146516ae199505ff470d94b18
 ```
 
 ## Key Architecture Decisions
+
+### v0.2.0 Standards Compliance
+
+**Breaking Changes from v0.1.0:**
+- All 16 columns renamed for clarity and standards compliance
+- 4 temporal columns changed from BIGINT (Unix milliseconds) to TIMESTAMP WITH TIME ZONE
+- Removed redundant `epochtime` field (was duplicate of `timestamp`)
+- Parameter renamed: `zip` → `postal_code`
+
+**Standards Alignment:**
+- Follows PostgreSQL best practices for column naming and type selection
+- Native PostgreSQL types for better query optimization
+- AI-friendly column names for automated query generation
+- Explicit units in column names (e.g., `_eur_kwh`, `_g_kwh`, `_pct`)
 
 ### Pattern: OpenWeather + Energy Charts Hybrid
 
@@ -110,7 +126,17 @@ let value = match json_obj.get("field") {
 let value = json_obj["field"];  // Don't do this!
 ```
 
-#### 3. energyprice is STRING (requires parsing)
+#### 3. Milliseconds to Microseconds Conversion (v0.2.0)
+
+For native TIMESTAMP WITH TIME ZONE support:
+
+```rust
+// Convert API milliseconds to PostgreSQL microseconds
+let timestamp_us = (ms_value as i64) * 1000;
+let timestamp_str = format_timestamp_with_tz(timestamp_us);
+```
+
+#### 4. energyprice is STRING (requires parsing)
 
 The Corrently API returns `energyprice` as a string, not a number:
 
@@ -122,11 +148,11 @@ let price_str = forecast_obj.get("energyprice")
 let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 ```
 
-## Production Metrics
+## Production Metrics (v0.2.0)
 
 **WASM Binary:**
 - Size: 106 KB (under 150 KB target ✅)
-- Checksum: `0747c2f6e9da61d27581b30716d9faa5204044419a4f796d5fb943e23143da02`
+- Checksum: `6f182a640568669afa6294641aa074bb13a332b146516ae199505ff470d94b18`
 - Validation: Zero WASI CLI imports ✅
 - Host version: ^0.1.0 (critical requirement)
 
@@ -137,50 +163,60 @@ let energyprice: f64 = price_str.parse().unwrap_or(0.0);
 - Parsing overhead: ~50-100ms
 
 **Data Quality:**
-- All 17 columns returning data (no NULLs)
+- All 16 columns returning data (no NULLs)
 - Nested JSON parsing working (timeframe fields)
 - String parsing working (energyprice)
 - Negative prices handled correctly
 - 113 forecast hours returned
+- Native TIMESTAMP WITH TIME ZONE (no conversion needed!)
 
 ## Known Limitations & Edge Cases
 
-**Handled in v0.1.0:**
+**Handled in v0.2.0:**
 - ✅ energyprice string parsing (converts "-0.014000" → -0.014)
 - ✅ Nested timeframe access (safe double .get() pattern)
-- ✅ Missing zip parameter (clear error message)
+- ✅ Missing postal_code parameter (clear error message)
 - ✅ Negative energy prices (correctly handled, no abs() applied)
 - ✅ Bounds checking (all Vec access uses safe .get())
+- ✅ Milliseconds to microseconds conversion for PostgreSQL timestamps
 
 **Not Yet Implemented:**
 - ⚠️ import_foreign_schema() - Returns empty vec (manual table creation required)
 - ⚠️ Signature field - Not exposed (cryptographic verification field)
 - ⚠️ API metadata fields - support, info, documentation not exposed
 - ⚠️ Rate limit handling - No retry logic for 429 errors
-- ⚠️ Invalid ZIP validation - May return empty results or API error
+- ⚠️ Invalid postal code validation - May return empty results or API error
 
 **API Constraints:**
 - Geographic scope: Germany only (German postal codes)
 - Forecast window: ~113 hours (variable, API-dependent)
 - Rate limiting: 2,000 requests/day (authenticated tier)
 - Historical data: Not available via this endpoint
-- Parameter validation: API-side (invalid ZIPs may error)
+- Parameter validation: API-side (invalid postal codes may error)
 
 ## Documentation
 
 **User Documentation:**
-- **README.md** - Comprehensive project overview
-- **QUICKSTART.md** - 3-minute setup guide
-- **docs/endpoints/gsi-prediction.md** - Complete endpoint reference
+- **README.md** - Comprehensive project overview (primary reference)
+- **QUICKSTART.md** - 3-minute setup guide (minimal, links to README)
+- **MIGRATION.md** - v0.1.0 → v0.2.0 upgrade guide (authoritative for changes)
+- **docs/endpoints/gsi-prediction.md** - Complete endpoint reference (technical authority)
+
+**For Users vs Developers:**
+- Users: Start with [QUICKSTART.md](QUICKSTART.md), then [README.md](README.md)
+- Developers: Read this file, then see [README.md](README.md#contributing) for contribution guidelines
+- Migration: See [MIGRATION.md](MIGRATION.md) for v0.1.0 → v0.2.0 upgrade
 
 ## Version Coordination
 
 **Important:** Keep versions synchronized across:
-- `Cargo.toml` - version = "0.1.0"
-- `wit/world.wit` - package powabase:supabase-fdw-corrently@0.1.0
+- `Cargo.toml` - version = "0.2.0"
+- `wit/world.wit` - package powabase:supabase-fdw-corrently@0.2.0
 - `CLAUDE.md` - Current Version section (this file)
+- `README.md` - fdw_package_version '0.2.0'
+- `MIGRATION.md` - FDW Version reference
 
-All three must match for successful builds and releases.
+All must match for successful builds and releases.
 
 ## Repository
 

@@ -8,7 +8,7 @@ This wrapper allows you to query hourly green energy forecasts from [Corrently G
 
 ```sql
 SELECT * FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168'
+WHERE postal_code = '69168'
 LIMIT 10;
 ```
 
@@ -19,20 +19,22 @@ A standalone WASM FDW that can be used with any Supabase project.
 ## Features
 
 - ✅ **1 Production Endpoint** - gsi_prediction (hourly green energy forecasts)
-- ✅ **17 Columns** - Complete forecast metrics (GSI, CO2, pricing, renewable breakdown)
-- ✅ **106 KB Optimized Binary** - Fast download and execution
-- ✅ **WHERE Clause Pushdown** - Efficient API parameter translation (zip, hours)
+- ✅ **16 Standardized Columns** - Complete forecast metrics (green energy index, CO2, pricing, renewable breakdown)
+- ✅ **Native PostgreSQL Types** - TIMESTAMP WITH TIME ZONE for temporal fields (v0.2.0)
+- ✅ **Standards-Compliant** - Follows PostgreSQL naming conventions and type best practices
+- ✅ **WHERE Clause Pushdown** - Efficient API parameter translation (postal_code, hours)
 - ✅ **~113 Hourly Forecasts** - 4.7 days ahead forecast horizon
 - ✅ **WASM-Based** - Works on hosted Supabase (no native extensions needed)
-- ✅ **Nested JSON Support** - Safe parsing of timeframe objects
 - ✅ **Sub-1-Second Response** - ~300-400ms query execution
-- ✅ **Handles Edge Cases** - Negative energy prices (surplus renewable energy)
+- ✅ **Cleaner SQL Queries** - No TO_TIMESTAMP() conversions needed!
 
 ## Available Endpoint
 
 | Endpoint | Rows | Use Case | Version |
 |----------|------|----------|---------|
-| **gsi_prediction** | ~113 | 🌱 Hourly green energy forecasting with CO2 and pricing data | v0.1.0 |
+| **gsi_prediction** | ~113 | 🌱 Hourly green energy forecasting with CO2 and pricing data | **v0.2.0** |
+
+**⚠️ Breaking Changes in v0.2.0:** All column names standardized, temporal fields now use `TIMESTAMP WITH TIME ZONE`. See [MIGRATION.md](MIGRATION.md) for upgrade guide.
 
 ## Quick Start
 
@@ -70,10 +72,10 @@ CREATE FOREIGN DATA WRAPPER IF NOT EXISTS wasm_wrapper
 CREATE SERVER corrently_server
   FOREIGN DATA WRAPPER wasm_wrapper
   OPTIONS (
-    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.1.0/corrently_fdw.wasm',
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.0/corrently_fdw.wasm',
     fdw_package_name 'powabase:supabase-fdw-corrently',
-    fdw_package_version '0.1.0',
-    fdw_package_checksum '0747c2f6e9da61d27581b30716d9faa5204044419a4f796d5fb943e23143da02',
+    fdw_package_version '0.2.0',
+    fdw_package_checksum '6f182a640568669afa6294641aa074bb13a332b146516ae199505ff470d94b18',
     api_url 'https://api.corrently.io',
     api_key 'your_corrently_api_key_here'
   );
@@ -81,25 +83,24 @@ CREATE SERVER corrently_server
 -- Create schema
 CREATE SCHEMA fdw_corrently;
 
--- Create foreign table
+-- Create foreign table (v0.2.0 schema)
 CREATE FOREIGN TABLE fdw_corrently.gsi_prediction (
-  epochtime bigint,
-  timestamp bigint,
-  timeframe_start bigint,
-  timeframe_end bigint,
-  gsi numeric,
-  eevalue bigint,
-  ewind bigint,
-  esolar bigint,
-  enwind bigint,
-  ensolar bigint,
-  sci bigint,
-  energyprice numeric,
-  co2_avg numeric,
-  co2_g_standard bigint,
-  co2_g_oekostrom bigint,
-  zip text,
-  iat bigint
+  forecast_start_time timestamp with time zone,
+  forecast_period_start timestamp with time zone,
+  forecast_period_end timestamp with time zone,
+  green_energy_index numeric,
+  renewable_energy_pct bigint,
+  wind_energy_pct bigint,
+  solar_energy_pct bigint,
+  net_wind_energy_pct bigint,
+  net_solar_energy_pct bigint,
+  smart_city_index bigint,
+  energy_price_eur_kwh numeric,
+  co2_baseline_g_kwh numeric,
+  standard_mix_co2_g_kwh bigint,
+  green_mix_co2_g_kwh bigint,
+  postal_code text,
+  forecast_created_at timestamp with time zone
 )
 SERVER corrently_server
 OPTIONS (object 'gsi_prediction');
@@ -109,25 +110,27 @@ OPTIONS (object 'gsi_prediction');
 
 ### Basic Forecast Query
 
-Get hourly green energy forecast for Heidelberg:
+Get hourly green energy forecast for Heidelberg (v0.2.0):
 
 ```sql
 SELECT
-  TO_TIMESTAMP(timestamp / 1000) as forecast_time,
-  gsi as green_index,
-  eevalue as renewable_pct,
-  energyprice as price_eur_kwh,
-  co2_g_standard as co2_grams_kwh
+  forecast_start_time,
+  green_energy_index,
+  renewable_energy_pct,
+  energy_price_eur_kwh,
+  standard_mix_co2_g_kwh
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168'
+WHERE postal_code = '69168'
 LIMIT 10;
 ```
 
 **Expected Output:**
-| forecast_time | green_index | renewable_pct | price_eur_kwh | co2_grams_kwh |
-|---------------|-------------|---------------|---------------|---------------|
-| 2025-10-25 14:00:00 | 26.6 | 28 | -0.014 | 233 |
-| 2025-10-25 15:00:00 | 32.1 | 34 | -0.021 | 215 |
+| forecast_start_time | green_energy_index | renewable_energy_pct | energy_price_eur_kwh | standard_mix_co2_g_kwh |
+|---------------------|-------------------|----------------------|----------------------|------------------------|
+| 2025-10-28 14:00:00+00 | 26.6 | 28 | -0.014 | 233 |
+| 2025-10-28 15:00:00+00 | 32.1 | 34 | -0.021 | 215 |
+
+**Note:** Timestamps are now native `TIMESTAMP WITH TIME ZONE` - no `TO_TIMESTAMP()` conversion needed!
 
 ### Find Optimal EV Charging Windows
 
@@ -135,19 +138,19 @@ Schedule charging during high green energy availability and low prices:
 
 ```sql
 SELECT
-  TO_TIMESTAMP(timestamp / 1000) as time,
-  gsi,
-  eevalue as renewable_pct,
-  energyprice,
+  forecast_start_time,
+  green_energy_index,
+  renewable_energy_pct,
+  energy_price_eur_kwh,
   CASE
-    WHEN gsi > 70 AND energyprice < 0 THEN 'Excellent'
-    WHEN gsi > 50 AND energyprice < 0.05 THEN 'Good'
+    WHEN green_energy_index > 70 AND energy_price_eur_kwh < 0 THEN 'Excellent'
+    WHEN green_energy_index > 50 AND energy_price_eur_kwh < 0.05 THEN 'Good'
     ELSE 'OK'
   END as charging_rating
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168'
-  AND gsi > 50
-ORDER BY gsi DESC, energyprice ASC
+WHERE postal_code = '69168'
+  AND green_energy_index > 50
+ORDER BY green_energy_index DESC, energy_price_eur_kwh ASC
 LIMIT 10;
 ```
 
@@ -157,14 +160,14 @@ Get only the next 24 hours of forecasts:
 
 ```sql
 SELECT
-  TO_TIMESTAMP(timestamp / 1000) as time,
-  gsi,
-  eevalue as renewable_pct,
-  ewind as wind_pct,
-  esolar as solar_pct
+  forecast_start_time,
+  green_energy_index,
+  renewable_energy_pct,
+  wind_energy_pct,
+  solar_energy_pct
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '10117' AND hours = 24
-ORDER BY timestamp
+WHERE postal_code = '10117' AND hours = 24
+ORDER BY forecast_start_time
 LIMIT 24;
 ```
 
@@ -174,12 +177,12 @@ Compare CO2 emissions between standard and green energy mix:
 
 ```sql
 SELECT
-  AVG(co2_g_standard) as avg_co2_standard,
-  AVG(co2_g_oekostrom) as avg_co2_green,
-  AVG(co2_g_standard - co2_g_oekostrom) as avg_savings_g_kwh,
-  ROUND((AVG(co2_g_standard - co2_g_oekostrom) / AVG(co2_g_standard)::numeric) * 100, 1) as savings_pct
+  AVG(standard_mix_co2_g_kwh) as avg_co2_standard,
+  AVG(green_mix_co2_g_kwh) as avg_co2_green,
+  AVG(standard_mix_co2_g_kwh - green_mix_co2_g_kwh) as avg_savings_g_kwh,
+  ROUND((AVG(standard_mix_co2_g_kwh - green_mix_co2_g_kwh) / AVG(standard_mix_co2_g_kwh)::numeric) * 100, 1) as savings_pct
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168';
+WHERE postal_code = '69168';
 ```
 
 ### Renewable Energy Breakdown
@@ -188,16 +191,16 @@ Analyze solar and wind contributions to renewable energy:
 
 ```sql
 SELECT
-  TO_TIMESTAMP(timestamp / 1000) as time,
-  eevalue as total_renewable_pct,
-  ewind as wind_pct,
-  esolar as solar_pct,
-  ROUND((ewind::numeric / NULLIF(eevalue, 0)) * 100, 1) as wind_share_of_renewable,
-  ROUND((esolar::numeric / NULLIF(eevalue, 0)) * 100, 1) as solar_share_of_renewable
+  forecast_start_time,
+  renewable_energy_pct,
+  wind_energy_pct,
+  solar_energy_pct,
+  ROUND((wind_energy_pct::numeric / NULLIF(renewable_energy_pct, 0)) * 100, 1) as wind_share_of_renewable,
+  ROUND((solar_energy_pct::numeric / NULLIF(renewable_energy_pct, 0)) * 100, 1) as solar_share_of_renewable
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168'
-  AND eevalue > 0
-ORDER BY timestamp
+WHERE postal_code = '69168'
+  AND renewable_energy_pct > 0
+ORDER BY forecast_start_time
 LIMIT 20;
 ```
 
@@ -207,18 +210,18 @@ Identify periods with surplus renewable energy (negative prices):
 
 ```sql
 SELECT
-  TO_TIMESTAMP(timestamp / 1000) as time,
-  gsi,
-  eevalue as renewable_pct,
-  energyprice,
+  forecast_start_time,
+  green_energy_index,
+  renewable_energy_pct,
+  energy_price_eur_kwh,
   CASE
-    WHEN energyprice < 0 THEN 'Surplus (negative)'
-    WHEN energyprice = 0 THEN 'Zero'
+    WHEN energy_price_eur_kwh < 0 THEN 'Surplus (negative)'
+    WHEN energy_price_eur_kwh = 0 THEN 'Zero'
     ELSE 'Positive'
   END as price_category
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168'
-ORDER BY energyprice ASC
+WHERE postal_code = '69168'
+ORDER BY energy_price_eur_kwh ASC
 LIMIT 10;
 ```
 
@@ -229,25 +232,25 @@ Get comprehensive forecast statistics:
 ```sql
 SELECT
   COUNT(*) as forecast_hours,
-  MIN(gsi) as min_green_index,
-  MAX(gsi) as max_green_index,
-  ROUND(AVG(gsi), 1) as avg_green_index,
-  MIN(energyprice) as min_price,
-  MAX(energyprice) as max_price,
-  ROUND(AVG(energyprice), 4) as avg_price,
-  ROUND(AVG(co2_g_standard), 0) as avg_co2_standard,
-  ROUND(AVG(co2_g_oekostrom), 0) as avg_co2_green
+  MIN(green_energy_index) as min_green_index,
+  MAX(green_energy_index) as max_green_index,
+  ROUND(AVG(green_energy_index), 1) as avg_green_index,
+  MIN(energy_price_eur_kwh) as min_price,
+  MAX(energy_price_eur_kwh) as max_price,
+  ROUND(AVG(energy_price_eur_kwh), 4) as avg_price,
+  ROUND(AVG(standard_mix_co2_g_kwh), 0) as avg_co2_standard,
+  ROUND(AVG(green_mix_co2_g_kwh), 0) as avg_co2_green
 FROM fdw_corrently.gsi_prediction
-WHERE zip = '69168';
+WHERE postal_code = '69168';
 ```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    SQL Query                             │
+│                    SQL Query (v0.2.0)                    │
 │  SELECT * FROM fdw_corrently.gsi_prediction             │
-│  WHERE zip = '69168'                                    │
+│  WHERE postal_code = '69168'                            │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
@@ -258,14 +261,15 @@ WHERE zip = '69168';
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────┐
-│            WASM FDW Wrapper (This Project)               │
-│  1. Extracts WHERE clause: zip = '69168'               │
-│  2. Builds API request with token                       │
+│            WASM FDW Wrapper (v0.2.0)                     │
+│  1. Extracts WHERE clause: postal_code = '69168'       │
+│  2. Builds API request with token (maps to zip param)   │
 │  3. Executes HTTP GET to Corrently API                  │
 │  4. Parses JSON response (forecast array)               │
 │  5. Flattens 113 forecast objects to 113 SQL rows      │
 │  6. Converts nested timeframe objects                   │
-│  7. Parses energyprice string to numeric                │
+│  7. Converts milliseconds → TIMESTAMP WITH TIME ZONE    │
+│  8. Standardizes column names                           │
 └──────────────────────┬──────────────────────────────────┘
                        │
                        ▼
@@ -289,6 +293,7 @@ Hosted Supabase instances cannot install native PostgreSQL extensions. WASM FDW 
 
 **Getting Started:**
 - **[QUICKSTART.md](QUICKSTART.md)** - 3-minute setup guide ⭐
+- **[MIGRATION.md](MIGRATION.md)** - Upgrade guide from v0.1.0 → v0.2.0 ⚠️
 - **[API Signup](https://console.corrently.io/)** - Get your free Corrently API key
 
 **Reference:**
@@ -330,10 +335,12 @@ supabase-fdw-corrently/
 
 ## Key Architecture Decisions
 
+- **Standards-Compliant Naming (v0.2.0)** - All columns use clear, descriptive names with explicit units (e.g., `_eur_kwh`, `_g_kwh`, `_pct`)
+- **Native Temporal Types (v0.2.0)** - TIMESTAMP WITH TIME ZONE for all temporal fields (milliseconds → microseconds conversion in WASM)
 - **Single-Endpoint Binary** - Focused WASM wrapper for gsi_prediction
 - **Array Flattening** - Corrently returns ~113 forecast objects, flattened to ~113 SQL rows
 - **Nested JSON Parsing** - Safe `.get()` access for nested timeframe objects
-- **String Parsing** - energyprice field requires string-to-numeric conversion
+- **String Parsing** - energy_price_eur_kwh field requires string-to-numeric conversion
 - **OpenWeather + Energy Charts Hybrid** - Combines authentication patterns with array handling
 - **Host Version ^0.1.0** - Critical requirement for Supabase Wrappers compatibility
 
