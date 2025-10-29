@@ -140,7 +140,7 @@ jobs:
 
             ### Endpoints
 
-            1 production-ready endpoint: **gsi_prediction** (17 columns - hourly green energy forecasting)
+            1 production-ready endpoint: **gsi_prediction** (16 columns - hourly green energy forecasting)
 
             ---
 
@@ -161,41 +161,38 @@ jobs:
             -- Create schema
             CREATE SCHEMA fdw_corrently;
 
-            -- Create foreign table
+            -- Create foreign table (v0.2.0 schema)
             CREATE FOREIGN TABLE fdw_corrently.gsi_prediction (
-              zip text,
-              timeframe_start bigint,
-              timeframe_end bigint,
-              unix_timestamp bigint,
-              eevalue bigint,
-              ewind bigint,
-              esolar bigint,
-              enuclear bigint,
-              ecoal bigint,
-              egas bigint,
-              eco2 bigint,
-              energyprice double precision,
-              gsi bigint,
-              gsi_average bigint,
-              gsi_standard bigint,
-              co2_g_standard bigint,
-              co2_g_oekostrom bigint
+              forecast_start_time timestamp with time zone,
+              forecast_period_start timestamp with time zone,
+              forecast_period_end timestamp with time zone,
+              green_energy_index numeric,
+              renewable_energy_pct bigint,
+              wind_energy_pct bigint,
+              solar_energy_pct bigint,
+              net_wind_energy_pct bigint,
+              net_solar_energy_pct bigint,
+              smart_city_index bigint,
+              energy_price_eur_kwh numeric,
+              co2_baseline_g_kwh numeric,
+              standard_mix_co2_g_kwh bigint,
+              green_mix_co2_g_kwh bigint,
+              postal_code text,
+              forecast_created_at timestamp with time zone
             )
             SERVER corrently_server
-            OPTIONS (
-              object 'gsi_prediction'
-            );
+            OPTIONS (object 'gsi_prediction');
 
             -- Query example (German postal code)
             SELECT
-              zip,
-              to_timestamp(unix_timestamp) AS forecast_time,
-              gsi AS green_energy_index,
-              eco2 AS co2_emissions_grams,
-              energyprice AS price_eur_per_kwh
+              forecast_start_time,
+              green_energy_index,
+              renewable_energy_pct,
+              energy_price_eur_kwh,
+              standard_mix_co2_g_kwh
             FROM fdw_corrently.gsi_prediction
-            WHERE zip = '69168'
-            ORDER BY unix_timestamp
+            WHERE postal_code = '69168'
+            ORDER BY forecast_start_time
             LIMIT 10;
             ```
 
@@ -207,6 +204,7 @@ jobs:
 
             - **[README](https://github.com/powabase/supabase-fdw-corrently/blob/main/README.md)** - Project overview
             - **[QUICKSTART](https://github.com/powabase/supabase-fdw-corrently/blob/main/QUICKSTART.md)** - 3-minute setup guide
+            - **[MIGRATION](https://github.com/powabase/supabase-fdw-corrently/blob/main/MIGRATION.md)** - Upgrade guide from v0.1.0
             - **[CLAUDE](https://github.com/powabase/supabase-fdw-corrently/blob/main/CLAUDE.md)** - Development guide
             - **[Endpoint Documentation](https://github.com/powabase/supabase-fdw-corrently/blob/main/docs/endpoints/gsi-prediction.md)** - Complete endpoint reference
 
