@@ -1,8 +1,8 @@
 // Corrently GrünstromIndex WASM FDW World Definition
 // Package: powabase:supabase-fdw-corrently
-// Version: 0.2.0
+// Version: 0.2.1
 
-package powabase:supabase-fdw-corrently@0.2.0;
+package powabase:supabase-fdw-corrently@0.2.1;
 
 // World definition for Corrently FDW wrapper
 world corrently-fdw {

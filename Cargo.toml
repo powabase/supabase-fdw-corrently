@@ -1,6 +1,6 @@
 [package]
 name = "corrently-fdw"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "WASM Foreign Data Wrapper for Corrently GrünstromIndex API (Standards-Compliant)"
 repository = "https://github.com/powabase/supabase-fdw-corrently"

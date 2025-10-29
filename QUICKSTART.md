@@ -11,6 +11,36 @@ Get Corrently GrünstromIndex green energy forecasts in your Supabase database i
 
 ### 1. Create Foreign Server
 
+**Option A: Secure Method (Vault) - Recommended**
+
+```sql
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS wrappers WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS vault WITH SCHEMA vault CASCADE;
+
+-- Store API key in Vault
+INSERT INTO vault.secrets (secret)
+VALUES ('your_corrently_api_key_here')  -- Replace with your JWT token from console.corrently.io
+RETURNING id;
+-- Copy the returned ID (e.g., 12345678-1234-1234-1234-123456789abc)
+
+-- Create FDW wrapper
+CREATE FOREIGN DATA WRAPPER IF NOT EXISTS wasm_wrapper
+  HANDLER wasm_fdw_handler VALIDATOR wasm_fdw_validator;
+
+-- Create server with Vault secret
+CREATE SERVER corrently_server FOREIGN DATA WRAPPER wasm_wrapper OPTIONS (
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.1/corrently_fdw.wasm',
+    fdw_package_name 'powabase:supabase-fdw-corrently',
+    fdw_package_version '0.2.1',
+    fdw_package_checksum 'a57c1a9e82447047b45a7b5098eb14d4903d4c8e980128a28b219920af4863fc',
+    api_url 'https://api.corrently.io',
+    api_key_id '12345678-1234-1234-1234-123456789abc'  -- Use the Vault secret ID from above
+);
+```
+
+**Option B: Legacy Method (Plain Text) - Deprecated ⚠️**
+
 ```sql
 CREATE EXTENSION IF NOT EXISTS wrappers WITH SCHEMA extensions;
 
@@ -18,18 +48,20 @@ CREATE FOREIGN DATA WRAPPER IF NOT EXISTS wasm_wrapper
   HANDLER wasm_fdw_handler VALIDATOR wasm_fdw_validator;
 
 CREATE SERVER corrently_server FOREIGN DATA WRAPPER wasm_wrapper OPTIONS (
-    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.0/corrently_fdw.wasm',
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.1/corrently_fdw.wasm',
     fdw_package_name 'powabase:supabase-fdw-corrently',
-    fdw_package_version '0.2.0',
-    fdw_package_checksum '6f182a640568669afa6294641aa074bb13a332b146516ae199505ff470d94b18',
+    fdw_package_version '0.2.1',
+    fdw_package_checksum 'a57c1a9e82447047b45a7b5098eb14d4903d4c8e980128a28b219920af4863fc',
     api_url 'https://api.corrently.io',
-    api_key 'your_corrently_api_key_here'  -- Replace with your JWT token from console.corrently.io
+    api_key 'your_corrently_api_key_here'  -- ⚠️ DEPRECATED: Plain text (not secure)
 );
 ```
 
+> **Note:** Option B will display a deprecation warning. See [README Security section](README.md#security-using-vault-for-api-keys-recommended) for migration instructions.
+
 ### 2. Create Foreign Table
 
-See [README.md](README.md#quick-start) for the complete v0.2.0 foreign table schema (16 columns).
+See [README.md](README.md#quick-start) for the complete v0.2.1 foreign table schema (16 columns).
 
 ### 3. Query Data
 
@@ -51,4 +83,4 @@ LIMIT 10;
 
 ---
 
-**Version:** v0.2.0 | **Binary:** 106 KB | **Columns:** 16 (TIMESTAMP WITH TIME ZONE for temporal fields)
+**Version:** v0.2.1 | **Binary:** ~106 KB | **Columns:** 16 | **Security:** Vault support for API keys

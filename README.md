@@ -32,7 +32,9 @@ A standalone WASM FDW that can be used with any Supabase project.
 
 | Endpoint | Rows | Use Case | Version |
 |----------|------|----------|---------|
-| **gsi_prediction** | ~113 | 🌱 Hourly green energy forecasting with CO2 and pricing data | **v0.2.0** |
+| **gsi_prediction** | ~113 | 🌱 Hourly green energy forecasting with CO2 and pricing data | **v0.2.1** |
+
+**🔐 Security Enhancement in v0.2.1:** Vault support for API keys (recommended). See [Security section](#security-using-vault-for-api-keys-recommended) below.
 
 **⚠️ Breaking Changes in v0.2.0:** All column names standardized, temporal fields now use `TIMESTAMP WITH TIME ZONE`. See [MIGRATION.md](MIGRATION.md) for upgrade guide.
 
@@ -68,16 +70,18 @@ CREATE FOREIGN DATA WRAPPER IF NOT EXISTS wasm_wrapper
   HANDLER wasm_fdw_handler
   VALIDATOR wasm_fdw_validator;
 
--- Create foreign server
+-- Create foreign server (using Vault for API key - recommended)
+-- See "Security" section below for setup instructions
 CREATE SERVER corrently_server
   FOREIGN DATA WRAPPER wasm_wrapper
   OPTIONS (
-    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.0/corrently_fdw.wasm',
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.1/corrently_fdw.wasm',
     fdw_package_name 'powabase:supabase-fdw-corrently',
-    fdw_package_version '0.2.0',
-    fdw_package_checksum '6f182a640568669afa6294641aa074bb13a332b146516ae199505ff470d94b18',
+    fdw_package_version '0.2.1',
+    fdw_package_checksum 'a57c1a9e82447047b45a7b5098eb14d4903d4c8e980128a28b219920af4863fc',
     api_url 'https://api.corrently.io',
-    api_key 'your_corrently_api_key_here'
+    api_key_id 'your-vault-secret-id-here'  -- Recommended: Vault secret ID
+    -- api_key 'your_corrently_api_key_here'  -- Deprecated: Plain text (see Security section)
   );
 
 -- Create schema
@@ -104,6 +108,86 @@ CREATE FOREIGN TABLE fdw_corrently.gsi_prediction (
 )
 SERVER corrently_server
 OPTIONS (object 'gsi_prediction');
+```
+
+## Security: Using Vault for API Keys (Recommended)
+
+**🔐 v0.2.1+** supports Supabase Vault for secure secret storage.
+
+### Why Use Vault?
+
+- ✅ **Encrypted Storage** - Secrets stored encrypted, not plain text
+- ✅ **Access Control** - Fine-grained permissions via PostgreSQL roles
+- ✅ **Audit Trail** - Track secret access and modifications
+- ✅ **Best Practice** - Industry standard for credential management
+
+### Setup with Vault (Recommended)
+
+**Step 1: Enable Vault and store your API key**
+
+```sql
+-- Enable Vault extension
+CREATE EXTENSION IF NOT EXISTS vault WITH SCHEMA vault CASCADE;
+
+-- Store API key in Vault (returns secret ID)
+INSERT INTO vault.secrets (secret)
+VALUES ('your_corrently_api_key_here')
+RETURNING id;
+-- Example output: 12345678-1234-1234-1234-123456789abc
+```
+
+**Step 2: Create server using Vault reference**
+
+```sql
+CREATE SERVER corrently_server
+  FOREIGN DATA WRAPPER wasm_wrapper
+  OPTIONS (
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.1/corrently_fdw.wasm',
+    fdw_package_name 'powabase:supabase-fdw-corrently',
+    fdw_package_version '0.2.1',
+    fdw_package_checksum 'a57c1a9e82447047b45a7b5098eb14d4903d4c8e980128a28b219920af4863fc',
+    api_url 'https://api.corrently.io',
+    api_key_id '12345678-1234-1234-1234-123456789abc'  -- Vault secret ID
+  );
+```
+
+**Key difference:** Use `api_key_id` (Vault secret ID) instead of `api_key` (plain text).
+
+### Legacy Plain Text Method (Deprecated)
+
+**⚠️ Deprecated:** Plain text API keys are still supported for backward compatibility but will trigger a warning.
+
+```sql
+CREATE SERVER corrently_server
+  FOREIGN DATA WRAPPER wasm_wrapper
+  OPTIONS (
+    fdw_package_url 'https://github.com/powabase/supabase-fdw-corrently/releases/download/v0.2.1/corrently_fdw.wasm',
+    fdw_package_name 'powabase:supabase-fdw-corrently',
+    fdw_package_version '0.2.1',
+    fdw_package_checksum 'a57c1a9e82447047b45a7b5098eb14d4903d4c8e980128a28b219920af4863fc',
+    api_url 'https://api.corrently.io',
+    api_key 'your_corrently_api_key_here'  -- ⚠️ DEPRECATED: Plain text (insecure)
+  );
+```
+
+**You will see this warning:**
+```
+WARNING: Using plain text 'api_key' is deprecated for security reasons.
+Please migrate to 'api_key_id' with Vault.
+See: https://supabase.com/docs/guides/database/vault
+```
+
+**Migration Path:** Update your server to use `api_key_id`:
+
+```sql
+-- 1. Store secret in Vault
+INSERT INTO vault.secrets (secret)
+VALUES ('your_corrently_api_key_here')
+RETURNING id;
+
+-- 2. Update server options
+ALTER SERVER corrently_server OPTIONS (DROP api_key);
+ALTER SERVER corrently_server OPTIONS (ADD api_key_id 'vault-secret-id-here');
 ```
 
 ## Usage Examples

@@ -10,15 +10,16 @@ This wrapper follows the WASM FDW architecture required for hosted Supabase inst
 
 ## Project Status
 
-**✅ v0.2.0 - Released**
+**✅ v0.2.1 - Released**
 
-- **Current Version:** v0.2.0
+- **Current Version:** v0.2.1
 - **Status:** Released and production-ready
 - **Endpoints:** 1 endpoint (gsi_prediction)
 - **Columns:** 16 fields per forecast hour (removed `epochtime` from v0.1.0)
-- **WASM Binary:** 106 KB, validated, zero WASI CLI imports ✅
+- **WASM Binary:** ~106 KB, validated, zero WASI CLI imports ✅
 - **Query Performance:** ~300-400ms ✅
-- **Breaking Changes:** All column names standardized, TIMESTAMP WITH TIME ZONE for temporal fields
+- **Security:** Vault support for API keys (Recommended), plain text deprecated
+- **Compatibility:** 100% backward compatible with v0.2.0
 
 ## Technology Stack
 

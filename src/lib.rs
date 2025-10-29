@@ -365,8 +365,22 @@ impl Guest for CorrentlyFdw {
         // Extract server options
         let opts = ctx.get_options(&OptionsType::Server);
 
-        // Extract API key (required)
-        this.api_key = opts.require("api_key")?;
+        // Extract API key (required) - supports Vault (recommended) or plain text (deprecated)
+        this.api_key = if let Some(vault_id) = opts.get("api_key_id") {
+            // Vault reference - secure method (RECOMMENDED)
+            utils::get_vault_secret(&vault_id)
+                .ok_or("Failed to retrieve API key from Vault. Ensure the secret exists and is accessible.")?
+        } else if let Some(plain_key) = opts.get("api_key") {
+            // Plain text - deprecated but supported for backward compatibility
+            utils::report_warning(
+                "Using plain text 'api_key' is deprecated for security reasons. \
+                 Please migrate to 'api_key_id' with Vault. \
+                 See: https://supabase.com/docs/guides/database/vault"
+            );
+            plain_key.clone()
+        } else {
+            return Err("Either 'api_key' or 'api_key_id' must be provided in server options".to_string());
+        };
 
         // Extract base URL (optional, with default)
         this.base_url = opts.require_or("api_url", "https://api.corrently.io");
